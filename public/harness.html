@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analytics Core UMD Harness</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      margin-top: 0;
+      color: #333;
+    }
+    .video-container {
+      position: relative;
+      background: black;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 20px 0;
+    }
+    video, canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin: 20px 0;
+    }
+    button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-start {
+      background: #10b981;
+      color: white;
+    }
+    .btn-start:hover {
+      background: #059669;
+    }
+    .btn-stop {
+      background: #ef4444;
+      color: white;
+    }
+    .btn-stop:hover {
+      background: #dc2626;
+    }
+    .btn-export {
+      background: #8b5cf6;
+      color: white;
+    }
+    .btn-export:hover {
+      background: #7c3aed;
+    }
+    .log {
+      background: #1f2937;
+      color: #10b981;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin: 20px 0;
+    }
+    .log-entry {
+      margin: 2px 0;
+      padding: 2px 0;
+      border-bottom: 1px solid #374151;
+    }
+    .metric {
+      color: #60a5fa;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Analytics Core UMD Harness</h1>
+    <p>Testing the standalone UMD build with Creao event orchestration</p>
+
+    <div class="video-container">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <div class="controls">
+      <button class="btn-start" onclick="startSession()">Start Session</button>
+      <button class="btn-stop" onclick="stopSession()">Stop Session</button>
+      <button class="btn-export" onclick="exportData()">Export Data</button>
+    </div>
+
+    <div id="log" class="log">
+      <div class="log-entry">System ready. Click "Start Session" to begin.</div>
+    </div>
+  </div>
+
+  <!-- UMD Build (in production, this would be the compiled bundle) -->
+  <script>
+    // Mock UMD build - in real deployment this would load analytics-core.umd.js
+    // For this harness, we simulate the controller API
+
+    window.AnalyticsCore = {
+      createAnalyticsController: function() {
+        let metricsCount = 0;
+        let startTime = 0;
+        let isRunning = false;
+        let intervalId = null;
+
+        return {
+          start: async function(opts) {
+            startTime = Date.now();
+            isRunning = true;
+            log('Controller started');
+
+            // Simulate metrics publishing at 10 Hz
+            intervalId = setInterval(() => {
+              if (!isRunning) return;
+
+              const mockMetric = {
+                t: Date.now() - startTime,
+                wpm: 120 + Math.random() * 40,
+                pitch_hz: 150 + Math.random() * 50,
+                rms: Math.random() * 0.3,
+                pause_ratio: 0.15 + Math.random() * 0.1,
+                fillers_per_min: Math.random() * 5,
+                head: {
+                  yaw: (Math.random() - 0.5) * 30,
+                  pitch: (Math.random() - 0.5) * 20
+                },
+                blink_per_min: 15 + Math.random() * 10,
+                smile: Math.random() * 0.5
+              };
+
+              metricsCount++;
+              window.dispatchEvent(new CustomEvent('creao:metrics', { detail: mockMetric }));
+            }, 100);
+
+            window.dispatchEvent(new Event('creao:started'));
+          },
+
+          stop: async function() {
+            isRunning = false;
+            if (intervalId) clearInterval(intervalId);
+            log('Controller stopped');
+            window.dispatchEvent(new Event('creao:stopped'));
+          },
+
+          onMetrics: function(cb) {
+            const handler = (e) => cb(e.detail);
+            window.addEventListener('creao:metrics', handler);
+            return () => window.removeEventListener('creao:metrics', handler);
+          },
+
+          getRecordingBlob: function() {
+            return null; // Mock
+          },
+
+          getMetricsDump: function() {
+            return {
+              startedAt: new Date(startTime).toISOString(),
+              endedAt: new Date().toISOString(),
+              durationMs: Date.now() - startTime,
+              metrics: [] // Mock
+            };
+          },
+
+          getPerfStats: function() {
+            return { faceFps: 12.3 };
+          }
+        };
+      }
+    };
+  </script>
+
+  <script>
+    const logEl = document.getElementById('log');
+    let ctrl = null;
+    let metricsReceived = 0;
+
+    function log(message) {
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // Initialize controller
+    ctrl = window.AnalyticsCore.createAnalyticsController();
+    log('Analytics controller created');
+
+    // Listen for Creao metrics events
+    window.addEventListener('creao:metrics', (e) => {
+      metricsReceived++;
+      if (metricsReceived % 10 === 0) {
+        const m = e.detail;
+        log(`Metrics #${metricsReceived}: WPM=${Math.round(m.wpm)}, Pitch=${Math.round(m.pitch_hz)}Hz, RMS=${m.rms.toFixed(3)}`);
+      }
+    });
+
+    // Listen for lifecycle events
+    window.addEventListener('creao:started', () => {
+      log('Event: creao:started');
+    });
+
+    window.addEventListener('creao:stopped', () => {
+      log('Event: creao:stopped');
+      log(`Total metrics received: ${metricsReceived}`);
+    });
+
+    window.addEventListener('creao:export', (e) => {
+      log('Event: creao:export');
+      log(`Export payload: ${JSON.stringify(e.detail).substring(0, 100)}...`);
+    });
+
+    window.addEventListener('creao:error', (e) => {
+      log(`ERROR: ${e.detail.message}`);
+    });
+
+    // Control functions
+    function startSession() {
+      log('Dispatching creao:command (start)');
+      window.dispatchEvent(new CustomEvent('creao:command', {
+        detail: { type: 'start' }
+      }));
+    }
+
+    function stopSession() {
+      log('Dispatching creao:command (stop)');
+      window.dispatchEvent(new CustomEvent('creao:command', {
+        detail: { type: 'stop' }
+      }));
+    }
+
+    function exportData() {
+      log('Dispatching creao:command (export)');
+      window.dispatchEvent(new CustomEvent('creao:command', {
+        detail: { type: 'export' }
+      }));
+    }
+
+    // Auto-test: Start for 5 seconds then export
+    log('Auto-test will run in 3 seconds...');
+    setTimeout(() => {
+      log('Starting auto-test');
+      startSession();
+
+      setTimeout(() => {
+        log('Auto-stopping session');
+        stopSession();
+
+        setTimeout(() => {
+          log('Auto-exporting data');
+          exportData();
+        }, 1000);
+      }, 5000);
+    }, 3000);
+  </script>
+</body>
+</html>

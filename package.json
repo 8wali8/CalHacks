@@ -1,0 +1,44 @@
+{
+  "name": "analytics-lab",
+  "version": "1.0.0",
+  "description": "Self-contained real-time delivery analytics - 100% client-side",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@tensorflow-models/face-landmarks-detection": "^1.0.2",
+    "@tensorflow/tfjs": "^4.15.0",
+    "chart.js": "^4.4.0",
+    "next": "^14.0.0",
+    "react": "^18.0.0",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.0.0",
+    "sentiment": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@types/sentiment": "^5.0.4",
+    "autoprefixer": "^10.4.0",
+    "eslint": "^8.0.0",
+    "eslint-config-next": "^14.0.0",
+    "null-loader": "^4.0.1",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.0.0"
+  },
+  "main": "lib/index.ts",
+  "module": "lib/index.ts",
+  "types": "types.d.ts",
+  "exports": {
+    ".": {
+      "import": "./lib/index.ts",
+      "require": "./lib/index.ts"
+    }
+  }
+}
