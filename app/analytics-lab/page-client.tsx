@@ -7,7 +7,6 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { LiveBadges } from '../../components/LiveBadges';
-import { LiveCharts } from '../../components/LiveCharts';
 import { useMetrics } from '../../hooks/useMetrics';
 import { createAnalyticsController } from '../../lib/analyticsController';
 import { downloadBlob, downloadJson, createTimestampedFilename } from '../../lib/download';
@@ -273,8 +272,8 @@ export default function AnalyticsLabClient() {
           </div>
         )}
 
-        {/* Main Layout: 3 Columns */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column: Video Preview + Overlay */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-md p-4">
@@ -367,22 +366,6 @@ export default function AnalyticsLabClient() {
             </div>
           </div>
 
-          {/* Right Column: Charts */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-md p-4">
-              <h2 className="text-lg font-semibold mb-3">Analytics Dashboard</h2>
-              <div className="text-xs text-gray-500 mb-3">Rolling 30s window, 10 Hz updates</div>
-              <LiveCharts
-                wpmData={metrics.wpmData}
-                pitchData={metrics.pitchData}
-                rmsData={metrics.rmsData}
-                pauseData={metrics.pauseData}
-                fillersData={metrics.fillersData}
-                blinkData={metrics.blinkData}
-                toneData={metrics.toneData}
-              />
-            </div>
-          </div>
         </div>
 
         {/* Footer */}

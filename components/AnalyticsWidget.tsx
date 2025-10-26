@@ -7,7 +7,6 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { LiveBadges } from './LiveBadges';
-import { LiveCharts } from './LiveCharts';
 import { useMetrics } from '../hooks/useMetrics';
 import { createAnalyticsController } from '../lib/analyticsController';
 import { asrService } from '../lib/asr';
@@ -18,7 +17,6 @@ export type AnalyticsWidgetProps = {
   controls?: boolean;
   showVideo?: boolean;
   showOverlay?: boolean;
-  showCharts?: boolean;
   showBadges?: boolean;
   onMetrics?: (m: MetricsEvent) => void;
   onStop?: (summary: {
@@ -33,7 +31,6 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({
   controls = true,
   showVideo = true,
   showOverlay = true,
-  showCharts = true,
   showBadges = true,
   onMetrics,
   onStop,
@@ -170,7 +167,7 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({
         <div className="mb-4 p-3 bg-red-100 text-red-800 rounded text-sm">{error}</div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Video */}
         {showVideo && (
           <div className={`${cardClass} rounded-lg p-3`}>
@@ -210,19 +207,6 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({
           )}
         </div>
 
-        {/* Charts */}
-        {showCharts && (
-          <div className={`${cardClass} rounded-lg p-3`}>
-            <LiveCharts
-              wpmData={metrics.wpmData}
-              pitchData={metrics.pitchData}
-              rmsData={metrics.rmsData}
-              pauseData={metrics.pauseData}
-              fillersData={metrics.fillersData}
-              blinkData={metrics.blinkData}
-            />
-          </div>
-        )}
       </div>
     </div>
   );

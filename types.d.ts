@@ -12,9 +12,9 @@ export type MetricsEvent = {
   gaze_jitter?: number;
   smile?: number; // 0..1 heuristic
   blink_per_min?: number;
-  tone_score?: number; // -1 (negative) to +1 (positive/energetic)
   transcript_partial?: string; // interim
   transcript_final?: string; // final segments appended
+  emotions?: Array<{ label: string; score: number }>; // multi-emotion classification
 };
 
 /**

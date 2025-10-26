@@ -14,12 +14,13 @@ type LiveBadgesProps = {
 
 type BadgeProps = {
   label: string;
-  value: string | number | undefined;
+  value?: string | number | React.ReactNode;
   unit?: string;
+  subtitle?: string;
   color?: 'blue' | 'green' | 'yellow' | 'red' | 'purple' | 'gray';
 };
 
-const Badge: React.FC<BadgeProps> = ({ label, value, unit, color = 'blue' }) => {
+const Badge: React.FC<BadgeProps> = ({ label, value, unit, subtitle, color = 'blue' }) => {
   const colorClasses = {
     blue: 'bg-blue-50 text-blue-700 border-blue-200',
     green: 'bg-green-50 text-green-700 border-green-200',
@@ -30,18 +31,84 @@ const Badge: React.FC<BadgeProps> = ({ label, value, unit, color = 'blue' }) => 
   };
 
   const displayValue = value !== undefined ? value : '—';
+  const isPrimitive =
+    typeof displayValue === 'number' || typeof displayValue === 'string';
 
   return (
     <div className={`px-3 py-2 rounded-lg border ${colorClasses[color]}`}>
       <div className="text-xs font-medium opacity-70">{label}</div>
-      <div className="text-xl font-bold mt-1">
-        {displayValue}
-        {unit && value !== undefined && (
-          <span className="text-sm font-normal ml-1 opacity-70">{unit}</span>
-        )}
-      </div>
+      {isPrimitive ? (
+        <div className="text-xl font-bold mt-1">
+          {displayValue}
+          {unit && value !== undefined && (
+            <span className="text-sm font-normal ml-1 opacity-70">{unit}</span>
+          )}
+        </div>
+      ) : (
+        <div className="mt-1 text-sm font-semibold leading-5">{displayValue}</div>
+      )}
+      {subtitle && <div className="text-xs mt-1 opacity-70">{subtitle}</div>}
     </div>
   );
+};
+
+const EMOTION_COLOR_MAP: Record<string, BadgeProps['color']> = {
+  joy: 'green',
+  love: 'green',
+  admiration: 'green',
+  pride: 'green',
+  relief: 'green',
+  approval: 'green',
+  gratitude: 'green',
+  optimism: 'green',
+  amusement: 'yellow',
+  excitement: 'yellow',
+  surprise: 'yellow',
+  curiosity: 'yellow',
+  neutral: 'blue',
+  confusion: 'blue',
+  realization: 'blue',
+  sadness: 'purple',
+  disappointment: 'purple',
+  grief: 'purple',
+  remorse: 'purple',
+  nervousness: 'purple',
+  embarrassment: 'purple',
+  fear: 'red',
+  disgust: 'red',
+  anger: 'red',
+  annoyance: 'red',
+};
+
+const formatEmotionLabel = (label: string) =>
+  label
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+
+const getEmotionBadge = (
+  emotions: Array<{ label: string; score: number }> | undefined
+): Pick<BadgeProps, 'value' | 'subtitle' | 'color'> => {
+  if (!emotions || emotions.length === 0) {
+    return { value: undefined, subtitle: undefined, color: 'gray' };
+  }
+
+  const sorted = [...emotions].sort((a, b) => b.score - a.score);
+  const primary = sorted[0];
+  const primaryLabel = formatEmotionLabel(primary.label);
+  const primaryPct = `${Math.round(primary.score * 100)}%`;
+
+  const subtitle = sorted
+    .slice(1, 3)
+    .map((emotion) => `${formatEmotionLabel(emotion.label)} ${Math.round(emotion.score * 100)}%`)
+    .join(' · ');
+
+  const color = EMOTION_COLOR_MAP[primary.label.toLowerCase()] ?? 'blue';
+
+  return {
+    value: `${primaryLabel} ${primaryPct}`,
+    subtitle: subtitle || undefined,
+    color,
+  };
 };
 
 export const LiveBadges: React.FC<LiveBadgesProps> = ({ metrics, asrAvailable }) => {
@@ -54,7 +121,7 @@ export const LiveBadges: React.FC<LiveBadgesProps> = ({ metrics, asrAvailable })
         <Badge label="Fillers" value="—" unit="/min" color="gray" />
         <Badge label="Blink" value="—" unit="/min" color="gray" />
         <Badge label="Gaze Stability" value="—" color="gray" />
-        <Badge label="Tone" value="—" color="gray" />
+        <Badge label="Emotion" value="—" color="gray" />
       </div>
     );
   }
@@ -98,21 +165,7 @@ export const LiveBadges: React.FC<LiveBadgesProps> = ({ metrics, asrAvailable })
     return 'red';
   };
 
-  const getToneColor = (v: number | undefined): BadgeProps['color'] => {
-    if (v === undefined) return 'gray';
-    if (v >= 0.3) return 'green'; // Positive/energetic
-    if (v >= -0.3) return 'blue'; // Neutral
-    return 'purple'; // Calm/low energy
-  };
-
-  const getToneLabel = (v: number | undefined): string => {
-    if (v === undefined) return '—';
-    const percentage = Math.round(v * 100);
-    if (v >= 0.5) return `+${percentage}% Energetic`;
-    if (v >= 0.3) return `+${percentage}% Positive`;
-    if (v >= -0.3) return `${percentage}% Neutral`;
-    return `${percentage}% Calm`;
-  };
+  const emotionBadge = getEmotionBadge(metrics.emotions);
 
   return (
     <div className="space-y-4">
@@ -136,9 +189,10 @@ export const LiveBadges: React.FC<LiveBadgesProps> = ({ metrics, asrAvailable })
           />
         )}
         <Badge
-          label="Tone"
-          value={getToneLabel(metrics.tone_score)}
-          color={getToneColor(metrics.tone_score)}
+          label="Emotion"
+          value={emotionBadge.value}
+          subtitle={emotionBadge.subtitle}
+          color={emotionBadge.color}
         />
       </div>
     </div>

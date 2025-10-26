@@ -66,7 +66,6 @@ export default function EmbedPage() {
         controls
         showVideo
         showOverlay
-        showCharts
         showBadges
         onMetrics={(m: MetricsEvent) => {
           // Optionally log or process metrics

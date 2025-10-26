@@ -27,7 +27,6 @@ export type MetricsState = {
   smileData: MetricDataPoint[];
   headYawData: MetricDataPoint[];
   headPitchData: MetricDataPoint[];
-  toneData: MetricDataPoint[];
 };
 
 /**
@@ -47,7 +46,6 @@ export function useMetrics(): MetricsState {
   const smileDataRef = useRef<MetricDataPoint[]>([]);
   const headYawDataRef = useRef<MetricDataPoint[]>([]);
   const headPitchDataRef = useRef<MetricDataPoint[]>([]);
-  const toneDataRef = useRef<MetricDataPoint[]>([]);
 
   // RMS history for pause ratio calculation
   const rmsHistoryRef = useRef<number[]>([]);
@@ -80,8 +78,6 @@ export function useMetrics(): MetricsState {
       addPoint(blinkDataRef.current, event.blink_per_min);
       addPoint(gazeDataRef.current, event.gaze_jitter);
       addPoint(smileDataRef.current, event.smile ? event.smile * 100 : undefined);
-      addPoint(toneDataRef.current, event.tone_score);
-
       if (event.head) {
         addPoint(headYawDataRef.current, event.head.yaw);
         addPoint(headPitchDataRef.current, event.head.pitch);
@@ -141,6 +137,5 @@ export function useMetrics(): MetricsState {
     smileData: smileDataRef.current,
     headYawData: headYawDataRef.current,
     headPitchData: headPitchDataRef.current,
-    toneData: toneDataRef.current,
   };
 }

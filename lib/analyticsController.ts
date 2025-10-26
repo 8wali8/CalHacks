@@ -14,11 +14,36 @@ import type {
 import { CONFIG, FILLER_REGEX } from './config';
 import { metricsBus } from './metricsBus';
 import { asrService } from './asr';
-import Sentiment from 'sentiment';
+import { classifyGoEmotions, initGoEmotions, isGoEmotionsReady } from './goemotions';
+
+// Emotion pipeline loader (lazy, browser-only)
+let _emoLoading = false;
+
+export const isEmotionLoading = () => _emoLoading;
+
+export async function getEmotionPipeline() {
+  if (typeof window === 'undefined') throw new Error('emotion pipeline is browser-only');
+  const needsLoad = !isGoEmotionsReady();
+  if (needsLoad) _emoLoading = true;
+
+  try {
+    return await initGoEmotions();
+  } finally {
+    if (needsLoad) _emoLoading = false;
+  }
+}
+
+export async function classifyEmotions(text: string, threshold = 0.30) {
+  if (!text?.trim()) return [];
+  try {
+    return await classifyGoEmotions(text, threshold, 3);
+  } catch (error) {
+    console.error('[Emotion] Classification failed:', error);
+    throw error;
+  }
+}
 
 export function createAnalyticsController(): AnalyticsController {
-  // Sentiment analyzer
-  const sentiment = new Sentiment();
 
   // State
   let isRunning = false;
@@ -55,8 +80,10 @@ export function createAnalyticsController(): AnalyticsController {
   let pitchHistory: number[] = [];
   let rmsHistory: number[] = [];
   let wpmHistory: number[] = [];
-  let sentimentHistory: number[] = [];
   const TONE_HISTORY_SIZE = 30; // 3 seconds at 10Hz
+
+  // Emotion state
+  let lastEmotions: Array<{ label: string; score: number }> = [];
 
   // Metrics
   const allMetrics: MetricsEvent[] = [];
@@ -199,18 +226,14 @@ export function createAnalyticsController(): AnalyticsController {
         const fillers = (text.match(FILLER_REGEX) || []).length;
         fillerCount += fillers;
 
-        // Analyze sentiment of the text
+        // Classify emotions from final transcript (async, non-blocking)
         if (text.trim().length > 0) {
-          const result = sentiment.analyze(text);
-          // Normalize sentiment score: typical range is -5 to +5 per sentence
-          // Map to -1 to +1 range
-          const normalizedSentiment = Math.max(-1, Math.min(1, result.score / 3));
-          sentimentHistory.push(normalizedSentiment);
-
-          // Keep only recent sentiment (last 30 samples)
-          if (sentimentHistory.length > TONE_HISTORY_SIZE) {
-            sentimentHistory.shift();
-          }
+          classifyEmotions(text).then((emotions) => {
+            lastEmotions = emotions;
+            console.log('[Emotion]', text, '→', emotions.slice(0, 3).map(e => `${e.label} ${(e.score * 100).toFixed(1)}%`).join(', '));
+          }).catch((error) => {
+            console.warn('[Emotion] Classification failed:', error);
+          });
         }
       },
       onError: (error) => {
@@ -260,73 +283,6 @@ export function createAnalyticsController(): AnalyticsController {
     return fillerCount / elapsedMin;
   }
 
-  /**
-   * Calculate tone score from audio features + text sentiment
-   * Returns -1 (negative/low energy) to +1 (positive/high energy)
-   */
-  function calculateToneScore(): number | undefined {
-    // Need at least 10 samples (1 second of data)
-    if (pitchHistory.length < 10 || rmsHistory.length < 10) {
-      return undefined;
-    }
-
-    // Filter out zeros from pitch (silence periods)
-    const validPitches = pitchHistory.filter(p => p > 0);
-    if (validPitches.length < 5) {
-      return undefined; // Not enough speech data
-    }
-
-    // 1. Pitch variance (high variance = more energetic/excited)
-    const pitchMean = validPitches.reduce((a, b) => a + b, 0) / validPitches.length;
-    const pitchVariance = validPitches.reduce((sum, p) => sum + Math.pow(p - pitchMean, 2), 0) / validPitches.length;
-    const pitchStdDev = Math.sqrt(pitchVariance);
-
-    // Calculate coefficient of variation (CV) - normalized measure of variability
-    // CV = stddev / mean, measures relative variability regardless of pitch level
-    const pitchCV = pitchMean > 0 ? pitchStdDev / pitchMean : 0;
-
-    // Typical CV for monotone speech: 0.03-0.05 (3-5%)
-    // Typical CV for expressive speech: 0.08-0.15 (8-15%)
-    // Very animated speech: 0.15+ (15%+)
-    // Map 0.05 (monotone) to -0.5, 0.10 (normal) to 0.5, 0.15+ (expressive) to 1.5
-    const varianceScore = (pitchCV - 0.07) / 0.05; // Range: roughly -0.5 to 1.5
-
-    // 2. Pitch level (higher pitch = more excited/stressed)
-    // Typical male: 85-180 Hz, female: 165-255 Hz
-    // Use 200 Hz as neutral midpoint (works for both genders)
-    // Map 150-250 Hz range to -1 to +1
-    const pitchLevelScore = (pitchMean - 200) / 50;
-
-    // 3. Volume dynamics (louder = more confident/energetic)
-    const rmsMean = rmsHistory.reduce((a, b) => a + b, 0) / rmsHistory.length;
-    // More sensitive volume detection (scale 0.05-0.2 range)
-    const volumeScore = (rmsMean - 0.08) / 0.06;
-
-    // 4. Speaking rate (faster = more excited, slower = calm/sad)
-    let rateScore = 0;
-    if (wpmHistory.length > 0) {
-      const wpmMean = wpmHistory.reduce((a, b) => a + b, 0) / wpmHistory.length;
-      // More sensitive: 100-170 WPM range maps to -1 to +1
-      rateScore = (wpmMean - 135) / 35;
-    }
-
-    // 5. Text sentiment (from transcript words)
-    let sentimentScore = 0;
-    if (sentimentHistory.length > 0) {
-      sentimentScore = sentimentHistory.reduce((a, b) => a + b, 0) / sentimentHistory.length;
-    }
-
-    // Weighted combination with amplification
-    const toneScore = (
-      varianceScore * 0.25 +       // Pitch variance (energy)        
-      rateScore * 0.25 +            // Speaking rate
-      sentimentScore * 0.5         // Text sentiment - HIGHEST weight
-    );
-
-    // Amplify and clamp to -1 to +1 range
-    // Multiply by 1.5 to make it more sensitive
-    return Math.max(-1, Math.min(1, toneScore * 1.5));
-  }
 
   /**
    * Publish unified metrics event at configured Hz
@@ -355,15 +311,15 @@ export function createAnalyticsController(): AnalyticsController {
       wpm: asrService.available ? currentWpm : undefined,
       pitch_hz: latestAudioData.pitch && latestAudioData.pitch > 0 ? latestAudioData.pitch : undefined,
       rms: latestAudioData.rms,
-      pause_ratio: undefined, // will be calculated from rolling buffer in UI
+      pause_ratio: rmsHistory.length > 0 ? calculatePauseRatio(rmsHistory) : undefined,
       fillers_per_min: calculateFillersPerMin(),
       head: latestFaceData.yaw !== undefined ? { yaw: latestFaceData.yaw, pitch: latestFaceData.pitch || 0 } : undefined,
       gaze_jitter: latestFaceData.gazeJitter,
       smile: latestFaceData.smile,
       blink_per_min: latestFaceData.blinkPerMin,
-      tone_score: calculateToneScore(),
       transcript_partial: transcriptInterim,
       transcript_final: transcriptFinal,
+      emotions: lastEmotions.length > 0 ? lastEmotions : undefined,
     };
 
     // Store and publish
@@ -441,7 +397,7 @@ export function createAnalyticsController(): AnalyticsController {
       pitchHistory = [];
       rmsHistory = [];
       wpmHistory = [];
-      sentimentHistory = [];
+      lastEmotions = [];
 
       try {
         // Get media stream
@@ -611,7 +567,6 @@ export function createAnalyticsController(): AnalyticsController {
       const fillersValues = allMetrics.map(m => m.fillers_per_min).filter((v): v is number => v !== undefined);
       const blinkValues = allMetrics.map(m => m.blink_per_min).filter((v): v is number => v !== undefined);
       const gazeValues = allMetrics.map(m => m.gaze_jitter).filter((v): v is number => v !== undefined);
-      const toneValues = allMetrics.map(m => m.tone_score).filter((v): v is number => v !== undefined);
 
       return {
         session: {
@@ -631,7 +586,7 @@ export function createAnalyticsController(): AnalyticsController {
           blink_per_min: calculateStats(blinkValues),
           gaze_stability: calculateStats(gazeValues),
         },
-        tone: calculateStats(toneValues),
+        tone: null,
         transcript: {
           full_text: transcriptFinal,
           word_count: transcriptFinal.split(/\s+/).filter(w => w.length > 0).length,

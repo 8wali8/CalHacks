@@ -8,6 +8,10 @@ const nextConfig = {
         test: /workers\/faceWorker\.ts$/,
         loader: 'null-loader',
       });
+
+      // Keep native onnxruntime bindings out of the server bundle
+      config.externals = config.externals || [];
+      config.externals.push('onnxruntime-node');
     }
 
     // Enable Web Workers (client-side only)
@@ -22,6 +26,13 @@ const nextConfig = {
         test: /\.worklet\.js$/,
         type: 'asset/resource',
       });
+
+      // Stub out onnxruntime-node for the browser build (we only use the WASM backend)
+      config.resolve = config.resolve || {};
+      config.resolve.alias = {
+        ...(config.resolve.alias || {}),
+        'onnxruntime-node': false,
+      };
     }
 
     return config;
